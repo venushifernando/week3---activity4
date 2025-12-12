@@ -1,0 +1,155 @@
+import sqlite3  # built‑in interface for SQLite databases.[web:21]
+
+DB_NAME = "college.db"
+
+def create_connection():
+    conn = sqlite3.connect(DB_NAME)
+    return conn
+
+def create_tables(conn):
+    cur = conn.cursor()
+
+    # Student, Teacher, Course tables (simplified from your ERD)[web:19]
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS Student(
+            Student_ID INTEGER PRIMARY KEY,
+            Student_FName TEXT NOT NULL,
+            Student_LName TEXT NOT NULL
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS Teacher(
+            Teacher_ID INTEGER PRIMARY KEY,
+            Teacher_FName TEXT NOT NULL,
+            Teacher_LName TEXT NOT NULL
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS Course(
+            Course_ID TEXT PRIMARY KEY,
+            Course_Name TEXT NOT NULL,
+            Course_Credit INTEGER
+        );
+    """)
+
+    # Lesson = enrolment of a student in a course, taught by a teacher
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS Lesson(
+            Lesson_ID INTEGER PRIMARY KEY,
+            Student_ID INTEGER NOT NULL,
+            Teacher_ID INTEGER NOT NULL,
+            Course_ID TEXT NOT NULL,
+            FOREIGN KEY(Student_ID) REFERENCES Student(Student_ID),
+            FOREIGN KEY(Teacher_ID) REFERENCES Teacher(Teacher_ID),
+            FOREIGN KEY(Course_ID) REFERENCES Course(Course_ID)
+        );
+    """)
+
+    # Delivery = which teacher delivers which course
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS Delivery(
+            Delivery_ID INTEGER PRIMARY KEY,
+            Teacher_ID INTEGER NOT NULL,
+            Course_ID TEXT NOT NULL,
+            FOREIGN KEY(Teacher_ID) REFERENCES Teacher(Teacher_ID),
+            FOREIGN KEY(Course_ID) REFERENCES Course(Course_ID)
+        );
+    """)
+
+    conn.commit()
+
+def seed_data(conn):
+    cur = conn.cursor()
+
+    # clear old data for repeatable runs
+    cur.executescript("""
+        DELETE FROM Lesson;
+        DELETE FROM Delivery;
+        DELETE FROM Student;
+        DELETE FROM Teacher;
+        DELETE FROM Course;
+    """)
+
+    # Courses (include MSE800 and MSE801)
+    courses = [
+        ("MSE800", "Database Systems", 15),
+        ("MSE801", "Advanced Databases", 15),
+        ("MSE802", "Programming 1", 15),
+    ]
+    cur.executemany("INSERT INTO Course VALUES (?, ?, ?);", courses)
+
+    # Teachers
+    teachers = [
+        (1, "Alice", "Smith"),
+        (2, "Bob", "Jones"),
+        (3, "Carol", "Lee"),
+    ]
+    cur.executemany("INSERT INTO Teacher VALUES (?, ?, ?);", teachers)
+
+    # Students
+    students = [
+        (1, "John", "Doe"),
+        (2, "Mary", "Brown"),
+        (3, "Liam", "Patel"),
+        (4, "Emma", "Clark"),
+    ]
+    cur.executemany("INSERT INTO Student VALUES (?, ?, ?);", students)
+
+    # Delivery (who teaches which course)
+    deliveries = [
+        (1, 1, "MSE800"),  # Alice teaches MSE800
+        (2, 2, "MSE801"),  # Bob teaches MSE801
+        (3, 3, "MSE801"),  # Carol also teaches MSE801
+    ]
+    cur.executemany("INSERT INTO Delivery VALUES (?, ?, ?);", deliveries)
+
+    # Lessons (enrolments) – link students to courses and teachers
+    lessons = [
+        (1, 1, 1, "MSE800"),  # John in MSE800 with Alice
+        (2, 2, 1, "MSE800"),  # Mary in MSE800
+        (3, 3, 1, "MSE800"),  # Liam in MSE800
+        (4, 4, 2, "MSE801"),  # Emma in MSE801 with Bob
+    ]
+    cur.executemany("INSERT INTO Lesson VALUES (?, ?, ?, ?);", lessons)
+
+    conn.commit()
+
+def count_students_in_mse800(conn):
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT COUNT(*)              -- COUNT() to count rows.[web:13]
+        FROM Lesson
+        WHERE Course_ID = 'MSE800';
+    """)
+    (count,) = cur.fetchone()
+    return count
+
+def teachers_for_mse801(conn):
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT t.Teacher_FName, t.Teacher_LName
+        FROM Teacher t
+        JOIN Delivery d ON t.Teacher_ID = d.Teacher_ID   -- join tables.[web:18]
+        WHERE d.Course_ID = 'MSE801';
+    """)
+    return cur.fetchall()
+
+def main():
+    conn = create_connection()
+    create_tables(conn)
+    seed_data(conn)
+
+    num_students_mse800 = count_students_in_mse800(conn)
+    print(f"Number of students in MSE800: {num_students_mse800}")
+
+    teachers_mse801 = teachers_for_mse801(conn)
+    print("Teachers who are teaching MSE801:")
+    for first, last in teachers_mse801:
+        print(f"- {first} {last}")
+
+    conn.close()
+
+if __name__ == "__main__":
+    main()
